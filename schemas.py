@@ -1,3 +1,4 @@
+from locale import currency
 from symtable import Symbol
 from typing import Union
 
@@ -30,6 +31,8 @@ class query_symbol(BaseModel):
 class create_users(BaseModel):
     username:str
     password:str
+    accounting_currency : str
+    country : str
     class Config:
         orm_mode=True
 
@@ -43,3 +46,11 @@ class Admin(BaseModel):
     username: str
     email: Union[str, None] = None
     disabled: Union[bool, None] = None
+
+class wallets(BaseModel):
+    xapikey : str
+    mnemonic : Union[str, None] = None
+    currency : str
+
+class createaccount(BaseModel):
+    currency :str

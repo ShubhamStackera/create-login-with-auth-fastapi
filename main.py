@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Union
+from venv import create
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -10,8 +11,10 @@ from database import SessionLocal, engine
 from typing import Optional,List
 import models
 import schemas
+import uuid 
 from pybit import inverse_perpetual, usdt_perpetual
 from sqlalchemy import DateTime, update
+import requests
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -27,6 +30,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="get-token-user")
 oauth2_scheme2 = OAuth2PasswordBearer(tokenUrl="get-token-admin")
+
+admin_apikey = "f8473d55-e8ed-4b94-9e4e-d9de9f7b8466"
 
 app = FastAPI(title="Blockchain")
 
@@ -89,7 +94,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     return user
 
-async def get_current_admin(token: str = Depends(oauth2_scheme)):
+async def get_current_admin(token: str = Depends(oauth2_scheme2)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -140,17 +145,19 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             return {"access_token": access_token, "token_type": "bearer"}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND , detail= "Wrong password")
 
-@app.post('/create-an-user',response_model=schemas.create_users,status_code=status.HTTP_201_CREATED, tags=["Users"])
+@app.post('/create-an-user',status_code=status.HTTP_201_CREATED, tags=["Users"])
 def create_an_Users(Users:schemas.create_users):
     db_Users=db.query(models.Users).filter(models.Users.username==Users.username).first()
-
     if db_Users is not None:
         raise HTTPException(status_code=400,detail="Users already exists")
-
+    generate_unique_customer_id = str(uuid.uuid1())[0:6]
     hash_password = pwd_context.hash(Users.password)
     new_Users=models.Users(
         username=Users.username,
         password=hash_password,
+        unique_customer_id = generate_unique_customer_id,
+        accounting_currency = Users.accounting_currency,
+        country = Users.country
     )
 
     db.add(new_Users)
@@ -162,6 +169,54 @@ def create_an_Users(Users:schemas.create_users):
 async def read_users_me(current_user: schemas.User = Depends(get_current_user)):
     return current_user
 
+@app.post("/create-new-account", tags=["Users"])
+async def createaccount( createaccount : schemas.createaccount ,current_user: schemas.User = Depends(get_current_user)):
+    get_xpub_from_db = db.query(models.Wallets).filter(models.Wallets.admin_id == 1).first()
+
+    url = "https://api-eu1.tatum.io/v3/ledger/account"
+
+    payload = {
+    "currency": createaccount.currency,
+    "xpub": get_xpub_from_db.xpub,
+    "customer": {
+        "accountingCurrency": current_user.accounting_currency,
+        "customerCountry": current_user.country,
+        "externalId": current_user.unique_customer_id,
+        "providerCountry": "US"
+    },
+    "compliant": False,
+    "accountCode": "AC_1011_B",
+    "accountingCurrency": "USD",
+    "accountNumber": "123456"
+    }
+
+    headers = {
+    "Content-Type": "application/json",
+    "x-api-key": "f8473d55-e8ed-4b94-9e4e-d9de9f7b8466"
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+    data = response.json()
+
+    Create_account=models.Create_account(
+        users_id = current_user.id,
+        externalId= current_user.unique_customer_id,
+        response_id = data["id"],
+        currency = createaccount.currency,
+        frozen = data["frozen"],
+        active = data["active"],
+        customerId = data["customerId"],
+        accountCode = data["accountCode"],
+        accountingCurrency = data["accountingCurrency"]
+    )
+
+    db.add(Create_account)
+    db.commit()
+    db.refresh(Create_account)
+    return Create_account
+
+
+#----------------------------------------------------------------------------------------------------------------------
 
 @app.post('/create-an-admin',response_model=schemas.create_admin,status_code=status.HTTP_201_CREATED, tags=["Admin"])
 def create_an_admin(Users:schemas.create_admin):
@@ -206,3 +261,41 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @app.get("/read-admin", tags=["Admin"])
 async def read_users_me(current_user: schemas.Admin = Depends(get_current_admin)):
     return current_user
+
+
+@app.post('/generate-Bitcoin-wallet',tags=["Admin"])
+async def BtcGenerateWallet(key : schemas.wallets, current_user: schemas.Admin = Depends(get_current_admin) ):
+    url = "https://api-eu1.tatum.io/v3/bitcoin/wallet"
+    query = {
+    "mnemonic": key.mnemonic
+    }
+
+    headers = {"x-api-key": key.xapikey}
+
+    response = requests.get(url, headers=headers, params=query)
+
+    data = response.json()
+    print(data) 
+    mnemonic = data['mnemonic']
+    xpub = data['xpub']
+    index = "1"
+    url = "https://api-eu1.tatum.io/v3/bitcoin/address/" + xpub + "/" + index
+
+    headers = {"x-api-key": key.xapikey}
+
+    response = requests.get(url, headers=headers)
+
+    data2 = response.json()
+    print(data2)
+
+    wallets=models.Wallets(
+        currency=key.currency,
+        xpub=xpub,
+        memonic = mnemonic,
+        admin_id = current_user.id
+    )
+
+    db.add(wallets)
+    db.commit()
+    db.refresh(wallets)
+    return wallets
