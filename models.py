@@ -16,3 +16,11 @@ class Users(Base):
     password=Column(String(255))
     datetime = Column(DateTime, default=datetime.datetime.now)
     disabled=Column(Boolean, default = False)
+
+class Admin(Base):
+    __tablename__='admin'
+    id=Column(Integer,primary_key=True, index = True)
+    username=Column(String(255),nullable=False,unique=True)
+    password=Column(String(255))
+    datetime = Column(DateTime, default=datetime.datetime.now)
+    disabled=Column(Boolean, default = False)

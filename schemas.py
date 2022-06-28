@@ -32,3 +32,14 @@ class create_users(BaseModel):
     password:str
     class Config:
         orm_mode=True
+
+class create_admin(BaseModel):
+    username:str
+    password:str
+    class Config:
+        orm_mode=True
+
+class Admin(BaseModel):
+    username: str
+    email: Union[str, None] = None
+    disabled: Union[bool, None] = None
