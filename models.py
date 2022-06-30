@@ -52,3 +52,17 @@ class Create_account(Base):
     accountCode = Column(String,nullable=False)
     accountingCurrency = Column(String,nullable=False)
 
+class GenerateDepositAddress(Base):
+    __tablename__ = "generate_deposit_address" 
+    id = Column(Integer,primary_key = True, index = True)
+    address = Column(String,nullable=False) 
+    currency = Column(String,nullable=False) 
+    derivationkey = Column(String,nullable=False) 
+    xpub = Column(String,nullable=False) 
+    users_id = Column(Integer, ForeignKey('users.id'))
+
+class sendingbtc(Base):
+    __tablename__ = "sendingbtc"
+    txId = Column(String,nullable=False,primary_key = True)
+    id = Column(String,nullable=False)
+    completed = Column(Boolean,nullable=False)

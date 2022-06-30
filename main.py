@@ -215,7 +215,85 @@ async def createaccount( createaccount : schemas.createaccount ,current_user: sc
     db.refresh(Create_account)
     return Create_account
 
+@app.post("/create-new-deposit-address", tags=["Users"])
+async def generatedepositaddress(current_user: schemas.User = Depends(get_current_user)):
+    get_user_details = db.query(models.Create_account).filter(models.Create_account.users_id == current_user.id).first()
+    print(get_user_details)
+    id = get_user_details.response_id
+    url = "https://api-eu1.tatum.io/v3/offchain/account/" + id + "/address"
 
+    headers = {"x-api-key": "f8473d55-e8ed-4b94-9e4e-d9de9f7b8466"}
+
+    response = requests.post(url, headers=headers)
+
+    data = response.json()
+
+    generate_deposit_address = models.GenerateDepositAddress(
+        address = data["address"],
+        currency = data["currency"],
+        derivationkey =  data["derivationKey"],
+        xpub = data["xpub"],
+        users_id = current_user.id
+    )
+    db.add(generate_deposit_address)
+    db.commit()
+    db.refresh(generate_deposit_address)
+    
+    return(data)
+
+@app.post("/get-account-balance", tags=["Users"])
+async def getAccountBalance(get_id : schemas.getaccountbalance):
+    id = get_id.id
+    print(id)
+    url = "https://api-eu1.tatum.io/v3/ledger/account/" + id + "/balance"
+
+    headers = {"x-api-key": "f8473d55-e8ed-4b94-9e4e-d9de9f7b8466"}
+
+    response = requests.get(url, headers=headers)
+
+    data = response.json()
+    return(data)
+
+@app.post("/send-btc", tags=["Users"])
+async def sendbtc(address : schemas.Address , current_user: schemas.User = Depends(get_current_user)):
+    get_user_details = db.query(models.Create_account).filter(models.Create_account.users_id == current_user.id).first()
+    print(get_user_details)
+    id = get_user_details.response_id
+    url = "https://api-eu1.tatum.io/v3/offchain/bitcoin/transfer"
+
+    print("------------------------",id,address.address)
+    payload = {
+    "senderAccountId": id,
+    "address": address.address,
+    "amount": "0.00001",
+    "compliant": False,
+    "fee": "0.00001",
+    "attr": "string",
+    "mnemonic": "witch collapse practice feed shame open despair creek road again ice least",
+    "xpub": "tpubDFFwQX2CCeULuLwkJkYwgu9xbzTMYHqmr7YnwkVttYLSPhvLK7cCxu3MYykPFHf7iN38J71VCfcKua8ojipomou2o1rGk6VfLJ1DMoSnaxV",
+    "paymentId": "12345",
+    "senderNote": "Sender note 2"
+    }
+    headers = {
+    "Content-Type": "application/json",
+    "x-api-key": "f8473d55-e8ed-4b94-9e4e-d9de9f7b8466"
+    }
+
+    response = requests.post(url, json=payload, headers=headers)
+
+    data = response.json()
+
+    # sendingbtc = models.sendingbtc(
+    #     txId = data["txId"],
+    #     id = data["id"],
+    #     completed =  data["completed"]
+    # )
+
+    # db.add(sendingbtc)
+    # db.commit()
+    # db.refresh(sendingbtc)
+    return(data)
+    
 #----------------------------------------------------------------------------------------------------------------------
 
 @app.post('/create-an-admin',response_model=schemas.create_admin,status_code=status.HTTP_201_CREATED, tags=["Admin"])

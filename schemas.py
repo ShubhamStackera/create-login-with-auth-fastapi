@@ -54,3 +54,12 @@ class wallets(BaseModel):
 
 class createaccount(BaseModel):
     currency :str
+
+class get_index(BaseModel):
+    index : int
+
+class getaccountbalance(BaseModel):
+    id : str
+
+class Address(BaseModel):
+    address : str
